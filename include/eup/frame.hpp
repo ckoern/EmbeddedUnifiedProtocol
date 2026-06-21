@@ -42,8 +42,8 @@ enum class MessageType : std::uint8_t {
     Invalid = 0x00,
     Command = 0x01,  // host -> device, optional parameters in PAYLOAD
     Reply   = 0x02,  // device -> host, status code (+ optional results)
-    Data    = 0x03,  // device -> host, unsolicited stream packet (see stream.hpp);
-                     // "status" streams are just Data packets with their own opcode
+    Stream  = 0x03,  // device -> host, unsolicited stream packet (see stream.hpp);
+                     // "status" streams are just Stream packets with their own opcode
 };
 
 // A decoded frame. PAYLOAD is copied into a fixed buffer so the caller owns the
@@ -89,7 +89,7 @@ DecodeResult decode_region(const std::uint8_t* region, std::size_t regionLen,
 
 // Streaming reader: feed received bytes one at a time (or in runs). It buffers
 // until a 0x00 delimiter closes a frame, then decodes it. This handles the
-// device pushing unsolicited Data packets interleaved with Replies.
+// device pushing unsolicited Stream packets interleaved with Replies.
 class FrameReader {
 public:
     enum class Event : std::uint8_t {

@@ -43,7 +43,7 @@ counter is application-supplied and the fields reuse the command codecs.
 `StreamDef<Opcode, Fields...>` carries only types, so the same definition is
 shared by the producer (device) and the consumer (host). The device serializes
 with `StreamWriter::write<TelemetryStream>(counter, adc0, temp)`; the host
-registers `stream<TelemetryStream, &on_telemetry>()` and routes received Data
+registers `stream<TelemetryStream, &on_telemetry>()` and routes received Stream
 frames with `dispatch_stream`. "Status" packets need no special support — they
 are just another stream opcode.
 

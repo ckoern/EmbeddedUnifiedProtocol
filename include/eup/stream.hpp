@@ -1,6 +1,6 @@
 // Embedded Unified Protocol (EUP) - unsolicited stream packets
 //
-// Stream packets are one-way device -> host messages, framed as Data. The
+// Stream packets are one-way device -> host messages, framed as Stream. The
 // payload is:
 //
 //   [ OPCODE (1) | COUNTER (u32 LE, 4) | field0 | field1 | ... ]
@@ -15,7 +15,7 @@
 // A stream is declared once in a shared header as StreamDef<Opcode, Fields...>
 // (types only, no bound function, so the same definition is safe to name in both
 // the device and host binaries). The device produces packets with StreamWriter;
-// the host registers local handlers and dispatches received Data frames with
+// the host registers local handlers and dispatches received Stream frames with
 // dispatch_stream.
 //
 // "Status" packets are not special: define a StreamDef for one and it comes for
@@ -71,7 +71,7 @@ public:
     StreamWriter(std::uint8_t* out, std::size_t cap) noexcept
         : out_(out), cap_(cap) {}
 
-    // Build [opcode | counter | fields] and frame it as a Data packet. Returns
+    // Build [opcode | counter | fields] and frame it as a Stream packet. Returns
     // <status, wire length>; transmit out[0 .. length) when status == Ok.
     template <class Def, class... Fields>
     EncodeResult write(std::uint32_t counter, Fields... fields) noexcept {
@@ -95,7 +95,7 @@ public:
         }
         off += fieldsWritten;
 
-        return encode_frame(MessageType::Data, payload,
+        return encode_frame(MessageType::Stream, payload,
                             static_cast<std::uint8_t>(off), out_, cap_);
     }
 
@@ -145,7 +145,7 @@ constexpr StreamEntry stream() noexcept {
     return StreamEntry{Def::opcode, &stream_thunk<Def, Fn>};
 }
 
-// Dispatch a received Data frame to the matching stream handler. Returns false
+// Dispatch a received Stream frame to the matching stream handler. Returns false
 // on an unknown opcode or a malformed body (a stream has no reply).
 inline bool dispatch_stream(const StreamEntry* table, std::size_t tableLen,
                             const Frame& f) noexcept {

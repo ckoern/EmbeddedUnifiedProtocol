@@ -24,7 +24,7 @@ using namespace app;
 // ===== Transport (OUT OF SCOPE: stubbed) ====================================
 // On real hardware: send_command() writes packet bytes to the serial port;
 // await_reply() blocks until the reply frame arrives, routing any interleaved
-// unsolicited stream packets (Data / Status) elsewhere and returning only the
+// unsolicited Stream packets elsewhere and returning only the
 // Reply. Here both ends live in one process, so send_command() hands the bytes
 // to the device and stashes the reply for await_reply() to return.
 struct SerialLink {
@@ -132,7 +132,7 @@ int main() {
     }
 
     // Unsolicited stream packets: the device pushes telemetry on its own; the
-    // host routes Data frames to its registered handlers via dispatch_stream.
+    // host routes Stream frames to its registered handlers via dispatch_stream.
     // (A real host would do this from its receive loop as packets arrive; here
     // we drive a few pushes inline.)
     std::printf("\n-- telemetry stream (device push, unsolicited) --\n");

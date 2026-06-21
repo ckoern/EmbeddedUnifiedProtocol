@@ -1,6 +1,6 @@
 // Host-side tests for the EUP stream layer (Catch2): device-side StreamWriter
-// produces a Data packet, the host decodes the frame and dispatch_stream routes
-// it to a typed handler. Reuses the command codecs for counter + fields.
+// produces a Stream packet, the host decodes the frame and dispatch_stream
+// routes it to a typed handler. Reuses the command codecs for counter + fields.
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -66,7 +66,7 @@ TEST_CASE("stream: round trip through write and dispatch", "[stream]") {
     REQUIRE(st == FrameStatus::Ok);
 
     const Frame f = to_frame(wire, len);
-    CHECK(f.type == MessageType::Data);
+    CHECK(f.type == MessageType::Stream);
     CHECK(f.payload[0] == 0x01);  // opcode
 
     g_imu = {};
@@ -111,7 +111,7 @@ TEST_CASE("stream: status-as-opcode dispatches like any other", "[stream]") {
 
 TEST_CASE("stream: unknown opcode is not dispatched", "[stream]") {
     Frame f;
-    f.type = MessageType::Data;
+    f.type = MessageType::Stream;
     f.payload[0] = 0x99;  // not in the table
     f.length = kStreamHeaderSize;  // opcode + counter, no fields
     CHECK(!dispatch_stream(kStreams, f));
@@ -119,7 +119,7 @@ TEST_CASE("stream: unknown opcode is not dispatched", "[stream]") {
 
 TEST_CASE("stream: body too short for the counter is rejected", "[stream]") {
     Frame f;
-    f.type = MessageType::Data;
+    f.type = MessageType::Stream;
     f.payload[0] = 0x01;  // ImuStream
     f.length = 3;         // opcode + 2 bytes: not enough for a uint32 counter
     CHECK(!dispatch_stream(kStreams, f));
@@ -127,7 +127,7 @@ TEST_CASE("stream: body too short for the counter is rejected", "[stream]") {
 
 TEST_CASE("stream: truncated fields are rejected", "[stream]") {
     Frame f;
-    f.type = MessageType::Data;
+    f.type = MessageType::Stream;
     f.payload[0] = 0x01;  // ImuStream expects three floats after the counter
     // opcode + counter(4) + only 4 bytes of field data (need 12)
     f.length = static_cast<std::uint8_t>(kStreamHeaderSize + 4);

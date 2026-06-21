@@ -1,7 +1,7 @@
 # Embedded Unified Protocol (EUP) — framing codec
 
 A small, allocation-free C++17 framing codec for an embedded USB device that
-exchanges **commands**, **replies**, and unsolicited **data** packets with a
+exchanges **commands**, **replies**, and unsolicited **stream** packets with a
 host. This repository contains the **framing layer only** (COBS + CRC16 + frame
 encode/decode); command dispatch and the host API are meant to be built on top.
 
@@ -31,7 +31,7 @@ A packet is at most **256 bytes**:
 - **COBS region** — Consistent Overhead Byte Stuffing of the raw block
   `TYPE | LENGTH | PAYLOAD | CRC16`. For our sizes (raw ≤ 254 bytes) COBS adds
   exactly one overhead byte.
-- **TYPE** — message type (`Command`, `Reply`, `Data`, …); opaque to the codec.
+- **TYPE** — message type (`Command`, `Reply`, `Stream`, …); opaque to the codec.
 - **LENGTH** — payload length, `0..250`.
 - **PAYLOAD** — `LENGTH` bytes; may contain `0x00` (COBS handles it).
 - **CRC16** — CRC-16/CCITT-FALSE over `TYPE + LENGTH + PAYLOAD`, **little-endian**.
@@ -58,7 +58,7 @@ A packet is at most **256 bytes**:
   endianness, change the two byte writes in `encode_frame` and the read in
   `decode_region`.
 - **Streaming receive**: `FrameReader` splits the incoming byte stream on `0x00`
-  and decodes each frame, so unsolicited `Data` packets interleaved with
+  and decodes each frame, so unsolicited `Stream` packets interleaved with
   `Reply` packets are handled naturally.
 
 ## API

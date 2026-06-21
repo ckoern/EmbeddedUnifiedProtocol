@@ -18,7 +18,7 @@
 //
 //   bool await_reply(Frame& out) noexcept;
 //       Block until the Reply to the command just sent arrives, and return it.
-//       The device may interleave unsolicited stream packets (Data / Status)
+//       The device may interleave unsolicited Stream packets (see stream.hpp)
 //       with replies; the transport is responsible for routing those elsewhere
 //       and handing back only the matching Reply frame here. Returns false on a
 //       link failure or timeout.

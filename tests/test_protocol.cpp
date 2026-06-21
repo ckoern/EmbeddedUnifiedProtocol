@@ -114,18 +114,18 @@ TEST_CASE("frame: round trips", "[frame]") {
     frame_roundtrip(MessageType::Command, {});               // no parameters
     frame_roundtrip(MessageType::Command, {0x10, 0x20});     // with parameters
     frame_roundtrip(MessageType::Reply, {0x00});             // status only
-    frame_roundtrip(MessageType::Data, {0x00, 0x00, 0xFF});  // payload w/ zeros
+    frame_roundtrip(MessageType::Stream, {0x00, 0x00, 0xFF});  // payload w/ zeros
     std::vector<std::uint8_t> maxPayload(kMaxPayload);
     for (std::size_t i = 0; i < maxPayload.size(); ++i) {
         maxPayload[i] = static_cast<std::uint8_t>(i & 0xFF);
     }
-    frame_roundtrip(MessageType::Data, maxPayload);          // largest packet
+    frame_roundtrip(MessageType::Stream, maxPayload);          // largest packet
 }
 
 TEST_CASE("frame: max packet size is exactly 256", "[frame]") {
     std::vector<std::uint8_t> maxPayload(kMaxPayload, 0xA5);
     std::uint8_t wire[kMaxPacket];
-    const auto [status, len] = encode_frame(MessageType::Data, maxPayload.data(),
+    const auto [status, len] = encode_frame(MessageType::Stream, maxPayload.data(),
                                             kMaxPayload, wire, sizeof(wire));
     CHECK(status == FrameStatus::Ok);
     CHECK(len == kMaxPacket);
@@ -134,7 +134,7 @@ TEST_CASE("frame: max packet size is exactly 256", "[frame]") {
 TEST_CASE("frame: payload too large is rejected", "[frame]") {
     std::uint8_t payload[kMaxPayload + 1] = {};
     std::uint8_t wire[kMaxPacket + 8];
-    const auto [status, len] = encode_frame(MessageType::Data, payload,
+    const auto [status, len] = encode_frame(MessageType::Stream, payload,
                                             kMaxPayload + 1, wire, sizeof(wire));
     (void)len;
     CHECK(status == FrameStatus::PayloadTooLarge);
@@ -166,7 +166,7 @@ TEST_CASE("frame reader: interleaved packets", "[frame][reader]") {
     const std::uint8_t data1[] = {0x00, 0x01, 0x02};
     std::uint8_t a[kMaxPacket], b[kMaxPacket], c[kMaxPacket];
     const auto [statusA, lenA] = encode_frame(MessageType::Command, cmd, 1, a, sizeof(a));
-    const auto [statusB, lenB] = encode_frame(MessageType::Data, data1, 3, b, sizeof(b));
+    const auto [statusB, lenB] = encode_frame(MessageType::Stream, data1, 3, b, sizeof(b));
     const auto [statusC, lenC] = encode_frame(MessageType::Reply, nullptr, 0, c, sizeof(c));
     CHECK(statusA == FrameStatus::Ok);
     CHECK(statusB == FrameStatus::Ok);
@@ -189,7 +189,7 @@ TEST_CASE("frame reader: interleaved packets", "[frame][reader]") {
 
     REQUIRE(got.size() == 3);
     CHECK(got[0] == MessageType::Command);
-    CHECK(got[1] == MessageType::Data);
+    CHECK(got[1] == MessageType::Stream);
     CHECK(got[2] == MessageType::Reply);
 }
 
