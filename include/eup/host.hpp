@@ -12,8 +12,19 @@
 // CommandDef the device registers, so the two ends can never disagree.
 //
 // Transport contract (duck-typed, no virtual dispatch):
-//   bool send(const std::uint8_t* wire, std::size_t len) noexcept;  // emit a packet
-//   bool recv(Frame& out) noexcept;  // block until one Reply frame is decoded
+//
+//   bool send_command(const std::uint8_t* wire, std::size_t len) noexcept;
+//       Transmit one Command packet. Returns false on a link failure.
+//
+//   bool await_reply(Frame& out) noexcept;
+//       Block until the Reply to the command just sent arrives, and return it.
+//       The device may interleave unsolicited stream packets (Data / Status)
+//       with replies; the transport is responsible for routing those elsewhere
+//       and handing back only the matching Reply frame here. Returns false on a
+//       link failure or timeout.
+//
+// The names are deliberately not send/recv: a conforming transport is more than
+// a byte pipe - it demultiplexes the inbound stream by message type.
 //
 // No dynamic allocation, no exceptions, no RTTI.
 
@@ -82,14 +93,16 @@ call(Transport& tx, Args&&... args) noexcept {
     const auto [enc, wlen] =
         encode_frame(MessageType::Command, payload,
                      static_cast<std::uint8_t>(1 + argLen), wire, sizeof(wire));
-    if (enc != FrameStatus::Ok || !tx.send(wire, wlen)) {
+    if (enc != FrameStatus::Ok || !tx.send_command(wire, wlen)) {
         std::get<0>(out) = StatusCode::TransportError;
         return out;
     }
 
-    // 2. Receive one Reply frame.
+    // 2. Wait for the matching Reply (the transport filters out any interleaved
+    //    stream packets and returns only the reply).
     Frame reply;
-    if (!tx.recv(reply) || reply.type != MessageType::Reply || reply.length < 1) {
+    if (!tx.await_reply(reply) || reply.type != MessageType::Reply ||
+        reply.length < 1) {
         std::get<0>(out) = StatusCode::TransportError;
         return out;
     }

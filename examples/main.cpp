@@ -20,20 +20,21 @@ using namespace eup;
 using namespace app;
 
 // ===== Transport (OUT OF SCOPE: stubbed) ====================================
-// On real hardware: send() writes packet bytes to the serial port; recv()
-// blocks until a full reply frame has been received and decoded. Here both ends
-// live in one process, so send() hands the bytes to the device and stashes the
-// reply for recv() to return.
+// On real hardware: send_command() writes packet bytes to the serial port;
+// await_reply() blocks until the reply frame arrives, routing any interleaved
+// unsolicited stream packets (Data / Status) elsewhere and returning only the
+// Reply. Here both ends live in one process, so send_command() hands the bytes
+// to the device and stashes the reply for await_reply() to return.
 struct SerialLink {
     std::uint8_t replyWire[kMaxPacket];
     std::size_t replyLen = 0;
 
-    bool send(const std::uint8_t* wire, std::size_t len) noexcept {
+    bool send_command(const std::uint8_t* wire, std::size_t len) noexcept {
         replyLen = device_handle_packet(wire, len, replyWire, sizeof(replyWire));
         return replyLen > 0;
     }
 
-    bool recv(Frame& out) noexcept {
+    bool await_reply(Frame& out) noexcept {
         if (replyLen == 0) {
             return false;
         }

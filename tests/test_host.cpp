@@ -76,7 +76,7 @@ struct LoopbackTransport {
     Frame pending{};
     bool has = false;
 
-    bool send(const std::uint8_t* wire, std::size_t len) noexcept {
+    bool send_command(const std::uint8_t* wire, std::size_t len) noexcept {
         Frame cmd;
         const auto [st, crc] = decode_region(wire, len - 1, cmd);
         (void)crc;
@@ -97,7 +97,7 @@ struct LoopbackTransport {
         return true;
     }
 
-    bool recv(Frame& out) noexcept {
+    bool await_reply(Frame& out) noexcept {
         if (!has) {
             return false;
         }
@@ -114,8 +114,8 @@ LoopbackTransport<N> make_loopback(const std::array<CommandEntry, N>& table) {
 
 // Always fails to send, to exercise the transport-error path.
 struct DeadTransport {
-    bool send(const std::uint8_t*, std::size_t) noexcept { return false; }
-    bool recv(Frame&) noexcept { return false; }
+    bool send_command(const std::uint8_t*, std::size_t) noexcept { return false; }
+    bool await_reply(Frame&) noexcept { return false; }
 };
 
 // ---- Tests ---------------------------------------------------------------
