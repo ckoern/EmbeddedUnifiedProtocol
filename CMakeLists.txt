@@ -59,11 +59,12 @@ catch_discover_tests(eup_host_tests)
 
 # Example: device firmware + host driver sharing one command contract.
 add_executable(eup_example
-    examples/device.cpp
-    examples/main.cpp
+    examples/rgb_led_adc/device.cpp
+    examples/rgb_led_adc/main.cpp
 )
 target_link_libraries(eup_example PRIVATE eup)
-target_include_directories(eup_example PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/examples)
+target_include_directories(eup_example PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/examples/rgb_led_adc)
 if(MSVC)
     target_compile_options(eup_example PRIVATE /W4 /GR-)
 else()
