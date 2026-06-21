@@ -35,3 +35,17 @@ add_test(NAME eup_command_tests COMMAND eup_command_tests)
 add_executable(eup_host_tests tests/test_host.cpp)
 target_link_libraries(eup_host_tests PRIVATE eup)
 add_test(NAME eup_host_tests COMMAND eup_host_tests)
+
+# Example: device firmware + host driver sharing one command contract.
+add_executable(eup_example
+    examples/device.cpp
+    examples/main.cpp
+)
+target_link_libraries(eup_example PRIVATE eup)
+target_include_directories(eup_example PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/examples)
+if(MSVC)
+    target_compile_options(eup_example PRIVATE /W4 /GR-)
+else()
+    target_compile_options(eup_example PRIVATE
+        -Wall -Wextra -Wpedantic -fno-exceptions -fno-rtti)
+endif()
