@@ -47,16 +47,23 @@ std::tuple<StatusCode, std::int32_t, float> stats() {
     return {StatusCode::Ok, -42, 1.5f};
 }
 
+std::tuple<StatusCode, InlineArray<std::uint16_t, 4>> echo_words(
+    InlineArray<std::uint16_t, 4> in) {
+    return {StatusCode::Ok, in};
+}
+
 using AddCmd = CommandDef<0x01, &add>;
 using SetLedCmd = CommandDef<0x02, &set_led>;
 using StatsCmd = CommandDef<0x03, &stats>;
+using EchoWordsCmd = CommandDef<0x04, &echo_words>;
 using UnregisteredCmd = CommandDef<0x7F, &stats>;  // opcode absent from table
 
 // Device-side table, built from the same defs the host calls.
-constexpr std::array<CommandEntry, 3> kTable{{
+constexpr std::array<CommandEntry, 4> kTable{{
     command<AddCmd>(),
     command<SetLedCmd>(),
     command<StatsCmd>(),
+    command<EchoWordsCmd>(),
 }};
 
 // ---- Transports ----------------------------------------------------------
@@ -162,6 +169,17 @@ void test_call_transport_error() {
     (void)sum;
 }
 
+void test_call_span_roundtrip() {
+    auto tx = make_loopback(kTable);
+    InlineArray<std::uint16_t, 4> in;
+    in.push_back(0x0101);
+    in.push_back(0x0202);
+    in.push_back(0x0303);
+    auto [status, out] = call<EchoWordsCmd>(tx, in);
+    CHECK(status == StatusCode::Ok);
+    CHECK(out == in);
+}
+
 }  // namespace
 
 int main() {
@@ -171,6 +189,7 @@ int main() {
     test_call_return_type_mirrors_handler();
     test_call_unknown_opcode();
     test_call_transport_error();
+    test_call_span_roundtrip();
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

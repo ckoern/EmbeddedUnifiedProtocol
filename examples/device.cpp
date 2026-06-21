@@ -24,6 +24,7 @@ using namespace eup;
 namespace {
 
 std::uint8_t g_rgb[3] = {0, 0, 0};
+InlineString<kMaxNameLen> g_name{};
 
 void hw_set_led_pwm(std::uint8_t r, std::uint8_t g, std::uint8_t b) noexcept {
     g_rgb[0] = r;
@@ -67,15 +68,38 @@ std::tuple<StatusCode, std::uint32_t> get_uptime_ms() {
     return {StatusCode::Ok, hw_millis()};
 }
 
+std::tuple<StatusCode> set_name(InlineString<kMaxNameLen> name) {
+    g_name = name;  // owning copy; no aliasing of the receive buffer
+    return {StatusCode::Ok};
+}
+
+std::tuple<StatusCode, InlineString<kMaxNameLen>> get_name() {
+    return {StatusCode::Ok, g_name};
+}
+
+std::tuple<StatusCode, InlineArray<std::uint16_t, kBlockLen>> read_block(
+    std::uint8_t start) {
+    InlineArray<std::uint16_t, kBlockLen> block;
+    for (std::size_t i = 0; i < kBlockLen; ++i) {
+        const std::uint8_t channel =
+            static_cast<std::uint8_t>((start + i) % kAdcChannelCount);
+        block.push_back(hw_read_adc(channel));
+    }
+    return {StatusCode::Ok, block};
+}
+
 // ===== Command table ========================================================
 
 namespace {
 
-constexpr std::array<CommandEntry, 4> kTable{{
+constexpr std::array<CommandEntry, 7> kTable{{
     command<SetRgbCmd>(),
     command<ReadAdcCmd>(),
     command<GetRgbCmd>(),
     command<GetUptimeCmd>(),
+    command<SetNameCmd>(),
+    command<GetNameCmd>(),
+    command<ReadBlockCmd>(),
 }};
 
 }  // namespace

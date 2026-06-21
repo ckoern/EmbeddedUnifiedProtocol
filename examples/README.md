@@ -21,6 +21,13 @@ in-process, so you can see the full round trip without any hardware.
 | `0x11` | `read_adc(u8 channel) -> (u16)` |
 | `0x12` | `get_rgb() -> (u8 r, u8 g, u8 b)` |
 | `0x13` | `get_uptime_ms() -> (u32)` |
+| `0x14` | `set_name(InlineString<16>) -> ()` |
+| `0x15` | `get_name() -> (InlineString<16>)` |
+| `0x16` | `read_block(u8 start) -> (InlineArray<u16,4>)` |
+
+The last three show variable-length **spans** (a short string and a short array)
+as both arguments and results. A span is length-prefixed on the wire, so it can
+appear anywhere in the argument/result list.
 
 ## What is stubbed (outside this library's scope)
 
@@ -54,6 +61,9 @@ read_adc(1)         -> Ok  value=576
 read_adc(2)         -> Ok  value=640
 read_adc(3)         -> Ok  value=704
 read_adc(4)         -> InvalidChannel  value=0
+set_name("sensor-A") -> Ok
+get_name()          -> Ok  "sensor-A"
+read_block(0)       -> Ok  [512, 576, 640, 704]
 get_uptime_ms()     -> Ok  5 ms
 ```
 

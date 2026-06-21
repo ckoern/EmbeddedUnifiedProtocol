@@ -34,7 +34,8 @@ using namespace eup;
 template <class T>
 void codec_roundtrip(T value) {
     std::uint8_t buf[16] = {};
-    const std::size_t n = Codec<T>::encode(value, buf);
+    std::size_t n = 0;
+    CHECK(Codec<T>::encode(value, buf, sizeof(buf), n));
     CHECK(n == Codec<T>::kMaxSize);
 
     T out{};
@@ -63,8 +64,81 @@ void test_codec_scalars() {
 
 void test_codec_little_endian() {
     std::uint8_t buf[4] = {};
-    Codec<std::uint32_t>::encode(0x11223344u, buf);
+    std::size_t n = 0;
+    CHECK(Codec<std::uint32_t>::encode(0x11223344u, buf, sizeof(buf), n));
     CHECK(buf[0] == 0x44 && buf[1] == 0x33 && buf[2] == 0x22 && buf[3] == 0x11);
+}
+
+// ---- Span codec ----------------------------------------------------------
+
+void test_span_array_roundtrip() {
+    InlineArray<std::uint16_t, 8> a;
+    a.push_back(0x1111);
+    a.push_back(0x2222);
+    a.push_back(0x3333);
+
+    std::uint8_t buf[32] = {};
+    std::size_t n = 0;
+    CHECK(Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
+    CHECK(n == 1 + 3 * 2);  // count byte + three uint16
+    CHECK(buf[0] == 3);
+
+    decltype(a) out;
+    std::size_t consumed = 0;
+    CHECK(Codec<decltype(a)>::decode(buf, n, out, consumed));
+    CHECK(consumed == n);
+    CHECK(out == a);
+}
+
+void test_span_string_roundtrip() {
+    InlineString<16> s = make_string<16>("hello");
+    CHECK(s.size() == 5);
+
+    std::uint8_t buf[32] = {};
+    std::size_t n = 0;
+    CHECK(Codec<InlineString<16>>::encode(s, buf, sizeof(buf), n));
+    CHECK(n == 1 + 5);
+    CHECK(buf[0] == 5);
+    CHECK(buf[1] == 'h' && buf[5] == 'o');
+
+    InlineString<16> out;
+    std::size_t consumed = 0;
+    CHECK(Codec<InlineString<16>>::decode(buf, n, out, consumed));
+    CHECK(out == s);
+}
+
+void test_span_empty() {
+    InlineArray<std::uint8_t, 8> a;  // empty
+    std::uint8_t buf[8] = {};
+    std::size_t n = 0;
+    CHECK(Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
+    CHECK(n == 1);
+    CHECK(buf[0] == 0);
+}
+
+void test_span_count_exceeds_capacity() {
+    // A buffer claiming count=5 decoded into a capacity-3 span must be rejected.
+    const std::uint8_t buf[] = {0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    InlineArray<std::uint16_t, 3> out;
+    std::size_t consumed = 0;
+    CHECK(!Codec<decltype(out)>::decode(buf, sizeof(buf), out, consumed));
+}
+
+void test_span_short_input() {
+    // Claims three uint16 but only one byte of element data follows.
+    const std::uint8_t buf[] = {0x03, 0x00};
+    InlineArray<std::uint16_t, 8> out;
+    std::size_t consumed = 0;
+    CHECK(!Codec<decltype(out)>::decode(buf, sizeof(buf), out, consumed));
+}
+
+void test_span_encode_output_too_small() {
+    InlineArray<std::uint16_t, 8> a;
+    a.push_back(0xAAAA);
+    a.push_back(0xBBBB);
+    std::uint8_t buf[3] = {};  // needs 1 + 4
+    std::size_t n = 0;
+    CHECK(!Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
 }
 
 void test_codec_short_input_fails() {
@@ -95,16 +169,24 @@ std::tuple<StatusCode, std::uint8_t> ping() {
     return {StatusCode::Ok, 0x7E};
 }
 
+// Span argument and span return value.
+std::tuple<StatusCode, InlineArray<std::uint8_t, 16>> echo(
+    InlineArray<std::uint8_t, 16> in) {
+    return {StatusCode::Ok, in};
+}
+
 constexpr std::uint8_t kOpAdd = 0x01;
 constexpr std::uint8_t kOpSetLed = 0x02;
 constexpr std::uint8_t kOpStats = 0x03;
 constexpr std::uint8_t kOpPing = 0x04;
+constexpr std::uint8_t kOpEcho = 0x05;
 
-constexpr std::array<CommandEntry, 4> kTable{{
+constexpr std::array<CommandEntry, 5> kTable{{
     command<kOpAdd, &add>(),
     command<kOpSetLed, &set_led>(),
     command<kOpStats, &stats>(),
     command<kOpPing, &ping>(),
+    command<kOpEcho, &echo>(),
 }};
 
 // Build a Command Frame in place: opcode followed by the given argument bytes.
@@ -193,6 +275,20 @@ void test_dispatch_trailing_bytes_rejected() {
     CHECK(reply[0] == static_cast<std::uint8_t>(StatusCode::BadArguments));
 }
 
+void test_dispatch_span_echo() {
+    // payload after opcode: [count=3 | 0xAA 0xBB 0xCC]
+    const std::uint8_t args[] = {0x03, 0xAA, 0xBB, 0xCC};
+    const Frame cmd = make_command(kOpEcho, args, 4);
+
+    std::uint8_t reply[kMaxPayload] = {};
+    std::uint8_t replyLen = 0;
+    CHECK(dispatch(kTable, cmd, reply, sizeof(reply), replyLen));
+    CHECK(reply[0] == static_cast<std::uint8_t>(StatusCode::Ok));
+    CHECK(replyLen == 1 + 1 + 3);  // status + count + 3 bytes
+    CHECK(reply[1] == 3);
+    CHECK(reply[2] == 0xAA && reply[3] == 0xBB && reply[4] == 0xCC);
+}
+
 // ---- Full round trip through the framing layer ---------------------------
 
 void test_command_full_wire_roundtrip() {
@@ -247,12 +343,19 @@ int main() {
     test_codec_scalars();
     test_codec_little_endian();
     test_codec_short_input_fails();
+    test_span_array_roundtrip();
+    test_span_string_roundtrip();
+    test_span_empty();
+    test_span_count_exceeds_capacity();
+    test_span_short_input();
+    test_span_encode_output_too_small();
     test_dispatch_args_and_result();
     test_dispatch_status_only_runs_handler();
     test_dispatch_no_args();
     test_dispatch_unknown_opcode();
     test_dispatch_bad_arguments();
     test_dispatch_trailing_bytes_rejected();
+    test_dispatch_span_echo();
     test_command_full_wire_roundtrip();
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);

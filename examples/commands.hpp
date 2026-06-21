@@ -18,6 +18,8 @@
 namespace app {
 
 using eup::CommandDef;
+using eup::InlineArray;
+using eup::InlineString;
 using eup::StatusCode;
 
 // Application-specific status code. The framework reserves values below
@@ -25,6 +27,8 @@ using eup::StatusCode;
 constexpr StatusCode InvalidChannel = static_cast<StatusCode>(0x20);
 
 constexpr std::uint8_t kAdcChannelCount = 4;
+constexpr std::size_t kMaxNameLen = 16;
+constexpr std::size_t kBlockLen = 4;
 
 // ----- Command handlers ------------------------------------------------------
 // Implemented on the device (see device.cpp). Declared here so the host shares
@@ -42,12 +46,25 @@ std::tuple<StatusCode, std::uint8_t, std::uint8_t, std::uint8_t> get_rgb();
 // Milliseconds since boot.
 std::tuple<StatusCode, std::uint32_t> get_uptime_ms();
 
+// Store a short device name (string span argument).
+std::tuple<StatusCode> set_name(InlineString<kMaxNameLen> name);
+
+// Read the stored device name back (string span result).
+std::tuple<StatusCode, InlineString<kMaxNameLen>> get_name();
+
+// Read a block of kBlockLen ADC samples starting at `start` (array span result).
+std::tuple<StatusCode, InlineArray<std::uint16_t, kBlockLen>> read_block(
+    std::uint8_t start);
+
 // ----- Opcode <-> handler bindings (shared by device and host) ---------------
 
 using SetRgbCmd    = CommandDef<0x10, &set_rgb>;
 using ReadAdcCmd   = CommandDef<0x11, &read_adc>;
 using GetRgbCmd    = CommandDef<0x12, &get_rgb>;
 using GetUptimeCmd = CommandDef<0x13, &get_uptime_ms>;
+using SetNameCmd   = CommandDef<0x14, &set_name>;
+using GetNameCmd   = CommandDef<0x15, &get_name>;
+using ReadBlockCmd = CommandDef<0x16, &read_block>;
 
 }  // namespace app
 

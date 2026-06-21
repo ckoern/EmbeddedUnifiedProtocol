@@ -92,6 +92,28 @@ int main() {
                     static_cast<unsigned>(value));
     }
 
+    // Store and read back a short device name (string span).
+    {
+        auto [st] = call<SetNameCmd>(link, make_string<kMaxNameLen>("sensor-A"));
+        std::printf("set_name(\"sensor-A\") -> %s\n", status_name(st));
+    }
+    {
+        auto [st, name] = call<GetNameCmd>(link);
+        std::printf("get_name()          -> %s  \"%.*s\"\n", status_name(st),
+                    static_cast<int>(name.size()),
+                    reinterpret_cast<const char*>(name.data()));
+    }
+
+    // Read a block of ADC samples (array span).
+    {
+        auto [st, block] = call<ReadBlockCmd>(link, std::uint8_t{0});
+        std::printf("read_block(0)       -> %s  [", status_name(st));
+        for (std::size_t i = 0; i < block.size(); ++i) {
+            std::printf("%s%u", i ? ", " : "", static_cast<unsigned>(block[i]));
+        }
+        std::printf("]\n");
+    }
+
     // Read the device uptime.
     {
         auto [st, ms] = call<GetUptimeCmd>(link);
