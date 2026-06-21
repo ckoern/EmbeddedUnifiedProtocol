@@ -10,6 +10,7 @@ add_library(eup STATIC
     src/crc16.cpp
     src/cobs.cpp
     src/frame.cpp
+    src/command.cpp
 )
 target_include_directories(eup PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -26,3 +27,7 @@ enable_testing()
 add_executable(eup_tests tests/test_protocol.cpp)
 target_link_libraries(eup_tests PRIVATE eup)
 add_test(NAME eup_tests COMMAND eup_tests)
+
+add_executable(eup_command_tests tests/test_command.cpp)
+target_link_libraries(eup_command_tests PRIVATE eup)
+add_test(NAME eup_command_tests COMMAND eup_command_tests)
