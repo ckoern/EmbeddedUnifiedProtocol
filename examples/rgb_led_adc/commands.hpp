@@ -1,10 +1,11 @@
 // EUP example - shared command contract.
 //
 // This header is the single source of truth that BOTH the device firmware and
-// the host driver include. The handler signatures define the wire format of
-// each command's arguments and results; the CommandDef bindings tie an opcode
-// to a handler. Neither side can drift from the other because both are derived
-// from the declarations below.
+// the host driver include. Each handler is declared here, and each CommandDef
+// pairs an opcode with that handler's signature via decltype. decltype is
+// unevaluated, so the contracts take no handler address and create no linkage
+// dependency - the host includes this header but never needs the definitions.
+// The device defines the handlers and binds them to the contracts in device.cpp.
 
 #ifndef APP_COMMANDS_HPP
 #define APP_COMMANDS_HPP
@@ -32,9 +33,10 @@ constexpr std::uint8_t kAdcChannelCount = 4;
 constexpr std::size_t kMaxNameLen = 16;
 constexpr std::size_t kBlockLen = 4;
 
-// ----- Command handlers ------------------------------------------------------
-// Implemented on the device (see device.cpp). Declared here so the host shares
-// the exact signatures that drive argument/return serialization.
+// ----- Command handlers (declared here, defined on the device) ---------------
+// The declarations let the contracts below name each handler's signature with
+// decltype. A declaration takes no address, so it adds no linkage dependency:
+// the host includes these but never needs the definitions.
 
 // Set the RGB LED channel intensities (0..255 each).
 std::tuple<StatusCode> set_rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b);
@@ -58,15 +60,15 @@ std::tuple<StatusCode, InlineString<kMaxNameLen>> get_name();
 std::tuple<StatusCode, InlineArray<std::uint16_t, kBlockLen>> read_block(
     std::uint8_t start);
 
-// ----- Opcode <-> handler bindings (shared by device and host) ---------------
+// ----- Command contracts (opcode + signature via decltype) -------------------
 
-using SetRgbCmd    = CommandDef<0x10, &set_rgb>;
-using ReadAdcCmd   = CommandDef<0x11, &read_adc>;
-using GetRgbCmd    = CommandDef<0x12, &get_rgb>;
-using GetUptimeCmd = CommandDef<0x13, &get_uptime_ms>;
-using SetNameCmd   = CommandDef<0x14, &set_name>;
-using GetNameCmd   = CommandDef<0x15, &get_name>;
-using ReadBlockCmd = CommandDef<0x16, &read_block>;
+using SetRgbCmd    = CommandDef<0x10, decltype(set_rgb)>;
+using ReadAdcCmd   = CommandDef<0x11, decltype(read_adc)>;
+using GetRgbCmd    = CommandDef<0x12, decltype(get_rgb)>;
+using GetUptimeCmd = CommandDef<0x13, decltype(get_uptime_ms)>;
+using SetNameCmd   = CommandDef<0x14, decltype(set_name)>;
+using GetNameCmd   = CommandDef<0x15, decltype(get_name)>;
+using ReadBlockCmd = CommandDef<0x16, decltype(read_block)>;
 
 // ----- Stream packets (device -> host, unsolicited) --------------------------
 // Types only: the device produces these, the host registers handlers for them.

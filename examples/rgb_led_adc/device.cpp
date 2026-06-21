@@ -93,13 +93,13 @@ std::tuple<StatusCode, InlineArray<std::uint16_t, kBlockLen>> read_block(
 namespace {
 
 constexpr std::array<CommandEntry, 7> kTable{{
-    command<SetRgbCmd>(),
-    command<ReadAdcCmd>(),
-    command<GetRgbCmd>(),
-    command<GetUptimeCmd>(),
-    command<SetNameCmd>(),
-    command<GetNameCmd>(),
-    command<ReadBlockCmd>(),
+    command<SetRgbCmd, &set_rgb>(),
+    command<ReadAdcCmd, &read_adc>(),
+    command<GetRgbCmd, &get_rgb>(),
+    command<GetUptimeCmd, &get_uptime_ms>(),
+    command<SetNameCmd, &set_name>(),
+    command<GetNameCmd, &get_name>(),
+    command<ReadBlockCmd, &read_block>(),
 }};
 
 }  // namespace

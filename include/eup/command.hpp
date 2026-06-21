@@ -6,18 +6,28 @@
 //   Command payload:  [ OPCODE (1) | arg0 | arg1 | ... ]   TYPE = Command
 //   Reply payload:    [ STATUS (1) | ret0 | ret1 | ... ]   TYPE = Reply
 //
-// A command is an ordinary function whose return tuple leads with a StatusCode:
+// A command is an ordinary function whose return tuple leads with a StatusCode.
+// Declare it in a shared header:
 //
 //   std::tuple<StatusCode, uint16_t> read_adc(uint8_t channel);
 //
-// Register it with a one-liner that binds an opcode:
+// The shared wire contract is a CommandDef carrying the command *signature as a
+// type*, taken from that declaration with decltype. decltype is unevaluated, so
+// it takes no function address - the contract binds no handler symbol and is
+// safe to name in both the device and host binaries:
 //
-//   constexpr std::array<CommandEntry, 1> kTable{{ command<0x02, &read_adc>() }};
+//   using ReadAdcCmd = CommandDef<0x02, decltype(read_adc)>;
 //
-// The argument and result wire formats are deduced from the function signature
-// (CommandTraits) and serialized via codec.hpp. Worst-case payload sizes are
-// checked against kMaxPayload at compile time, so a command that cannot fit in
-// a packet fails to build.
+// The device defines the handler and registers it against the contract (this is
+// the only place the handler address is taken, so it stays inside the device
+// binary); the host calls the command from the contract types alone:
+//
+//   constexpr std::array kTable{{ command<ReadAdcCmd, &read_adc>() }};  // device
+//   auto [st, v] = call<ReadAdcCmd>(transport, channel);               // host
+//
+// Argument and result wire formats are serialized via codec.hpp. Worst-case
+// payload sizes are checked against kMaxPayload at compile time, so a command
+// that cannot fit in a packet fails to build.
 //
 // No dynamic allocation, no exceptions, no RTTI.
 
@@ -104,16 +114,23 @@ DispatchResult dispatch_thunk(const std::uint8_t* args, std::size_t argLen,
     return {status, written};
 }
 
-// Binds an opcode to a handler in one place, so the device registration and the
-// host stub (host.hpp) reference the same definition and can never drift:
+// The shared wire contract: an opcode plus the command signature as a *function
+// type* - the return tuple (leading with StatusCode) and the argument types.
+// The type is usually obtained from a handler declaration with decltype, which
+// is unevaluated and so takes no address: naming a CommandDef creates no linkage
+// dependency on the handler, and the host can use it without pulling in device
+// code. The handler is bound separately, on the device only (command<Def, Fn>).
 //
-//   using AddCmd = CommandDef<0x01, &add>;
-//   command<AddCmd>()        // device: table entry
-//   call<AddCmd>(tx, 20, 22) // host:   typed call
-template <std::uint8_t Op, auto Fn>
-struct CommandDef {
+//   std::tuple<StatusCode, std::uint16_t> add(std::uint8_t, std::uint8_t);  // shared decl
+//   using AddCmd = CommandDef<0x01, decltype(add)>;
+template <std::uint8_t Op, class Signature>
+struct CommandDef;
+
+template <std::uint8_t Op, class... Rets, class... Args>
+struct CommandDef<Op, std::tuple<StatusCode, Rets...>(Args...)> {
     static constexpr std::uint8_t opcode = Op;
-    static constexpr auto         fn     = Fn;
+    using ArgsTuple = std::tuple<std::decay_t<Args>...>;  // request field types
+    using RetsTuple = std::tuple<Rets...>;                // reply field types
 };
 
 // One row of the command table: an opcode and its thunk.
@@ -135,10 +152,18 @@ constexpr CommandEntry command() noexcept {
     return CommandEntry{Op, &dispatch_thunk<Fn>};
 }
 
-// Build a table entry from a CommandDef (single source of truth for the opcode).
-template <class Def>
+// Device-side registration: bind a handler `Fn` to a CommandDef contract. The
+// handler's signature is checked against the contract, so the two cannot drift.
+// This is the only place a handler address is taken, keeping it inside the
+// device binary.
+template <class Def, auto Fn>
 constexpr CommandEntry command() noexcept {
-    return command<Def::opcode, Def::fn>();
+    using Traits = CommandTraits<decltype(Fn)>;
+    static_assert(std::is_same_v<typename Traits::ArgsTuple, typename Def::ArgsTuple>,
+                  "handler arguments do not match the command contract");
+    static_assert(std::is_same_v<typename Traits::RetsTuple, typename Def::RetsTuple>,
+                  "handler results do not match the command contract");
+    return command<Def::opcode, Fn>();
 }
 
 // Dispatch a decoded Command frame against a table. Writes the Reply payload

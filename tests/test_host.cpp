@@ -41,18 +41,19 @@ std::tuple<StatusCode, InlineArray<std::uint16_t, 4>> echo_words(
     return {StatusCode::Ok, in};
 }
 
-using AddCmd = CommandDef<0x01, &add>;
-using SetLedCmd = CommandDef<0x02, &set_led>;
-using StatsCmd = CommandDef<0x03, &stats>;
-using EchoWordsCmd = CommandDef<0x04, &echo_words>;
-using UnregisteredCmd = CommandDef<0x7F, &stats>;  // opcode absent from table
+using AddCmd = CommandDef<0x01, decltype(add)>;
+using SetLedCmd = CommandDef<0x02, decltype(set_led)>;
+using StatsCmd = CommandDef<0x03, decltype(stats)>;
+using EchoWordsCmd = CommandDef<0x04, decltype(echo_words)>;
+// Same signature as stats, opcode deliberately absent from the table below.
+using UnregisteredCmd = CommandDef<0x7F, decltype(stats)>;
 
-// Device-side table, built from the same defs the host calls.
+// Device-side table: the contract opcode + the local handler bound together.
 constexpr std::array<CommandEntry, 4> kTable{{
-    command<AddCmd>(),
-    command<SetLedCmd>(),
-    command<StatsCmd>(),
-    command<EchoWordsCmd>(),
+    command<AddCmd, &add>(),
+    command<SetLedCmd, &set_led>(),
+    command<StatsCmd, &stats>(),
+    command<EchoWordsCmd, &echo_words>(),
 }};
 
 // ---- Transports ----------------------------------------------------------

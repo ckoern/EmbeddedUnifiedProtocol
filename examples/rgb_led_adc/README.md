@@ -10,7 +10,7 @@ in-process, so you can see the full round trip without any hardware.
 
 | File | Side | Role |
 |------|------|------|
-| [commands.hpp](commands.hpp) | shared | The command contract: handler signatures + opcode bindings (`CommandDef`). Both sides include this — it is the single source of truth. |
+| [commands.hpp](commands.hpp) | shared | Handler declarations + command contracts (`CommandDef<opcode, decltype(handler)>`). `decltype` takes no address, so the host has no linkage dependency on device code. Both sides include this. |
 | [device.cpp](device.cpp) / [device.hpp](device.hpp) | device | Handler implementations, the command table, and the reframe→dispatch→reply path. Hardware (PWM/ADC/tick) is stubbed. |
 | [main.cpp](main.cpp) | host | Calls each command with typed arguments and prints the typed results. The transport (UART/USB) is stubbed. |
 
@@ -92,14 +92,20 @@ get_uptime_ms()     -> Ok  5 ms
 
 ## Adding a command
 
-1. Declare the handler and bind an opcode in [commands.hpp](commands.hpp):
+1. Declare the handler and bind a contract in [commands.hpp](commands.hpp):
    ```cpp
    std::tuple<StatusCode, std::uint16_t> read_temp(std::uint8_t sensor);
-   using ReadTempCmd = CommandDef<0x14, &read_temp>;
+   using ReadTempCmd = CommandDef<0x17, decltype(read_temp)>;
    ```
-2. Implement it in [device.cpp](device.cpp) and add `command<ReadTempCmd>()` to
-   the table.
+2. Implement the handler in [device.cpp](device.cpp) and register it against the
+   contract — this is the only place the handler *address* is taken:
+   ```cpp
+   std::tuple<StatusCode, std::uint16_t> read_temp(std::uint8_t sensor) { ... }
+   // ... add to the table:
+   command<ReadTempCmd, &read_temp>(),
+   ```
 3. Call it from the host: `auto [st, t] = call<ReadTempCmd>(link, sensor);`
 
 The wire format is derived from the signature; a command whose worst-case
-payload would not fit in a packet fails to compile.
+payload would not fit in a packet fails to compile, and a handler whose
+signature does not match its contract fails to compile at the registration site.

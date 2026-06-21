@@ -63,16 +63,17 @@ void assign_tail(Result& out, const Rets& rets, std::index_sequence<I...>) noexc
 
 }  // namespace detail
 
-// Call command `Op`/`Fn` over `tx`. Serializes the arguments, sends a Command
-// frame, waits for the Reply, and returns std::tuple<StatusCode, Rets...> -
-// exactly the handler's return type. Link/parse failures surface as
-// StatusCode::TransportError; a malformed reply body as BadArguments.
-template <std::uint8_t Op, auto Fn, class Transport, class... Args>
-typename WithStatus<typename CommandTraits<decltype(Fn)>::RetsTuple>::type
+// Call command `Def` over `tx`. Serializes the arguments, sends a Command frame,
+// waits for the Reply, and returns std::tuple<StatusCode, Rets...> - the mirror
+// of the handler's return type. Everything is derived from the contract types;
+// no handler is referenced, so the host has no linkage dependency on device
+// code. Link/parse failures surface as StatusCode::TransportError; a malformed
+// reply body as BadArguments.
+template <class Def, class Transport, class... Args>
+typename WithStatus<typename Def::RetsTuple>::type
 call(Transport& tx, Args&&... args) noexcept {
-    using Traits    = CommandTraits<decltype(Fn)>;
-    using ArgsTuple = typename Traits::ArgsTuple;
-    using RetsTuple = typename Traits::RetsTuple;
+    using ArgsTuple = typename Def::ArgsTuple;
+    using RetsTuple = typename Def::RetsTuple;
     using Result    = typename WithStatus<RetsTuple>::type;
 
     static_assert(std::tuple_size_v<ArgsTuple> == sizeof...(Args),
@@ -85,7 +86,7 @@ call(Transport& tx, Args&&... args) noexcept {
     // 1. Build the Command payload: [opcode | encoded args].
     ArgsTuple a{std::forward<Args>(args)...};
     std::uint8_t payload[kMaxPayload];
-    payload[0] = Op;
+    payload[0] = Def::opcode;
     std::size_t argLen = 0;
     encode_tuple(a, payload + 1, sizeof(payload) - 1, argLen);  // cannot overflow
 
@@ -119,16 +120,6 @@ call(Transport& tx, Args&&... args) noexcept {
                             std::make_index_sequence<std::tuple_size_v<RetsTuple>>{});
     }
     return out;
-}
-
-// Call overload taking a CommandDef (single source of truth for the opcode).
-// Def::fn is a constexpr member, so decltype yields a const-qualified pointer;
-// strip the cv-qualifier to match CommandTraits' R(*)(Args...) pattern.
-template <class Def, class Transport, class... Args>
-typename WithStatus<
-    typename CommandTraits<std::remove_cv_t<decltype(Def::fn)>>::RetsTuple>::type
-call(Transport& tx, Args&&... args) noexcept {
-    return call<Def::opcode, Def::fn>(tx, std::forward<Args>(args)...);
 }
 
 }  // namespace eup
