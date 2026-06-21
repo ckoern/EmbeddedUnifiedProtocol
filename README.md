@@ -18,14 +18,16 @@ encode/decode); command dispatch and the host API are meant to be built on top.
 A packet is at most **256 bytes**:
 
 ```
-+--------+----------+------+--------+-------------------+-----------+
-| 0x00   | overhead | TYPE | LENGTH | PAYLOAD (0..250)  | CRC16 (2) |
-| delim  |  (COBS)  |      |        |                   |  LE       |
-+--------+----------+------+--------+-------------------+-----------+
-         \__________________ COBS-encoded region ___________________/
++----------+------+--------+-------------------+-----------+--------+
+| overhead | TYPE | LENGTH | PAYLOAD (0..250)  | CRC16 (2) | 0x00   |
+|  (COBS)  |      |        |                   |  LE       | delim  |
++----------+------+--------+-------------------+-----------+--------+
+\__________________ COBS-encoded region ___________________/
 ```
 
-- **0x00 delimiter** — the only zero byte on the wire; marks frame boundaries.
+- **0x00 delimiter** — the only zero byte on the wire; it **trails** each
+  packet, marking the frame boundary. The receiver splits the stream on `0x00`,
+  so the delimiter that closes one frame also separates it from the next.
 - **COBS region** — Consistent Overhead Byte Stuffing of the raw block
   `TYPE | LENGTH | PAYLOAD | CRC16`. For our sizes (raw ≤ 254 bytes) COBS adds
   exactly one overhead byte.
