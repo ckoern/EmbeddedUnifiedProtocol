@@ -57,6 +57,10 @@ add_executable(eup_host_tests tests/test_host.cpp)
 target_link_libraries(eup_host_tests PRIVATE eup Catch2::Catch2WithMain)
 catch_discover_tests(eup_host_tests)
 
+add_executable(eup_stream_tests tests/test_stream.cpp)
+target_link_libraries(eup_stream_tests PRIVATE eup Catch2::Catch2WithMain)
+catch_discover_tests(eup_stream_tests)
+
 # Example: device firmware + host driver sharing one command contract.
 add_executable(eup_example
     examples/rgb_led_adc/device.cpp

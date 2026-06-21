@@ -135,4 +135,18 @@ std::size_t device_handle_packet(const std::uint8_t* cmdWire, std::size_t cmdLen
     return status == FrameStatus::Ok ? wireLen : 0;
 }
 
+// ===== Transmit path (unsolicited streams) ==================================
+
+std::size_t device_emit_telemetry(std::uint32_t counter, std::uint8_t* out,
+                                  std::size_t cap) {
+    const std::uint16_t adc0 = hw_read_adc(0);
+    const std::int16_t temp_c10 =
+        static_cast<std::int16_t>(230 + counter * 5);  // fake 23.0 C, rising
+
+    StreamWriter writer(out, cap);
+    const auto [status, wireLen] =
+        writer.write<TelemetryStream>(counter, adc0, temp_c10);
+    return status == FrameStatus::Ok ? wireLen : 0;
+}
+
 }  // namespace app

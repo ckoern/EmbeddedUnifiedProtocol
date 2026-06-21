@@ -42,8 +42,8 @@ enum class MessageType : std::uint8_t {
     Invalid = 0x00,
     Command = 0x01,  // host -> device, optional parameters in PAYLOAD
     Reply   = 0x02,  // device -> host, status code (+ optional results)
-    Data    = 0x03,  // device -> host, unsolicited data packet
-    Status  = 0x04,  // device -> host, unsolicited status packet
+    Data    = 0x03,  // device -> host, unsolicited stream packet (see stream.hpp);
+                     // "status" streams are just Data packets with their own opcode
 };
 
 // A decoded frame. PAYLOAD is copied into a fixed buffer so the caller owns the

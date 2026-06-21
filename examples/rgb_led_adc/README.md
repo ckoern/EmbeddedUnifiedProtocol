@@ -1,7 +1,8 @@
 # EUP example: RGB LED + ADC
 
-A minimal end-to-end example of the command layer: a host driver calls commands
-on a device, which controls an RGB LED and reads ADC channels. It is built as a
+A minimal end-to-end example of the command **and** stream layers: a host driver
+calls commands on a device (which controls an RGB LED and reads ADC channels),
+and the device pushes unsolicited telemetry stream packets back. It is built as a
 single runnable program (`eup_example`) that wires the host and device together
 in-process, so you can see the full round trip without any hardware.
 
@@ -28,6 +29,23 @@ in-process, so you can see the full round trip without any hardware.
 The last three show variable-length **spans** (a short string and a short array)
 as both arguments and results. A span is length-prefixed on the wire, so it can
 appear anywhere in the argument/result list.
+
+## Streams (device → host, unsolicited)
+
+The device also pushes **stream packets** on its own schedule. A stream is a
+one-way packet whose payload is `[ opcode | uint32 counter | fields... ]`; the
+counter is application-supplied and the fields reuse the command codecs.
+
+| Opcode | Fields |
+|--------|--------|
+| `0x20` | `TelemetryStream` — `u16 adc0`, `i16 temp` (tenths of °C) |
+
+`StreamDef<Opcode, Fields...>` carries only types, so the same definition is
+shared by the producer (device) and the consumer (host). The device serializes
+with `StreamWriter::write<TelemetryStream>(counter, adc0, temp)`; the host
+registers `stream<TelemetryStream, &on_telemetry>()` and routes received Data
+frames with `dispatch_stream`. "Status" packets need no special support — they
+are just another stream opcode.
 
 ## What is stubbed (outside this library's scope)
 
@@ -65,6 +83,11 @@ set_name("sensor-A") -> Ok
 get_name()          -> Ok  "sensor-A"
 read_block(0)       -> Ok  [512, 576, 640, 704]
 get_uptime_ms()     -> Ok  5 ms
+
+-- telemetry stream (device push, unsolicited) --
+  telemetry #0: adc0=512, temp=23.0 C
+  telemetry #1: adc0=512, temp=23.5 C
+  telemetry #2: adc0=512, temp=24.0 C
 ```
 
 ## Adding a command

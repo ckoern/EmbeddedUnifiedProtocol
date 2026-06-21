@@ -19,6 +19,12 @@ namespace app {
 std::size_t device_handle_packet(const std::uint8_t* cmdWire, std::size_t cmdLen,
                                   std::uint8_t* replyWire, std::size_t replyCap);
 
+// Produce one unsolicited telemetry stream packet (the device pushes these on
+// its own schedule). `counter` is the application-supplied sequence value.
+// Writes the packet's wire bytes into `out`; returns the length, or 0 on error.
+std::size_t device_emit_telemetry(std::uint32_t counter, std::uint8_t* out,
+                                  std::size_t cap);
+
 }  // namespace app
 
 #endif  // APP_DEVICE_HPP

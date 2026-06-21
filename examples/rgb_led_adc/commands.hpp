@@ -11,6 +11,7 @@
 
 #include "eup/command.hpp"
 #include "eup/status.hpp"
+#include "eup/stream.hpp"
 
 #include <cstdint>
 #include <tuple>
@@ -21,6 +22,7 @@ using eup::CommandDef;
 using eup::InlineArray;
 using eup::InlineString;
 using eup::StatusCode;
+using eup::StreamDef;
 
 // Application-specific status code. The framework reserves values below
 // StatusCode::kAppBase (0x20); applications number their own from there.
@@ -65,6 +67,13 @@ using GetUptimeCmd = CommandDef<0x13, &get_uptime_ms>;
 using SetNameCmd   = CommandDef<0x14, &set_name>;
 using GetNameCmd   = CommandDef<0x15, &get_name>;
 using ReadBlockCmd = CommandDef<0x16, &read_block>;
+
+// ----- Stream packets (device -> host, unsolicited) --------------------------
+// Types only: the device produces these, the host registers handlers for them.
+// A uint32 counter is implicit (the library emits it; the app supplies a value).
+
+// Periodic telemetry: ADC channel 0 reading + temperature in tenths of a degree.
+using TelemetryStream = StreamDef<0x20, std::uint16_t, std::int16_t>;
 
 }  // namespace app
 

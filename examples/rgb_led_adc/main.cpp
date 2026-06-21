@@ -11,7 +11,9 @@
 
 #include "eup/frame.hpp"
 #include "eup/host.hpp"
+#include "eup/stream.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -61,6 +63,13 @@ const char* status_name(StatusCode s) noexcept {
         return "InvalidChannel";
     }
     return "??";
+}
+
+// Stream handler: invoked by dispatch_stream when a telemetry packet arrives.
+void on_telemetry(std::uint32_t counter, std::uint16_t adc0, std::int16_t temp_c10) {
+    std::printf("  telemetry #%u: adc0=%u, temp=%.1f C\n",
+                static_cast<unsigned>(counter), static_cast<unsigned>(adc0),
+                temp_c10 / 10.0);
 }
 
 }  // namespace
@@ -120,6 +129,25 @@ int main() {
         auto [st, ms] = call<GetUptimeCmd>(link);
         std::printf("get_uptime_ms()     -> %s  %u ms\n", status_name(st),
                     static_cast<unsigned>(ms));
+    }
+
+    // Unsolicited stream packets: the device pushes telemetry on its own; the
+    // host routes Data frames to its registered handlers via dispatch_stream.
+    // (A real host would do this from its receive loop as packets arrive; here
+    // we drive a few pushes inline.)
+    std::printf("\n-- telemetry stream (device push, unsolicited) --\n");
+    constexpr std::array<StreamEntry, 1> kStreams{{
+        stream<TelemetryStream, &on_telemetry>(),
+    }};
+    for (std::uint32_t seq = 0; seq < 3; ++seq) {
+        std::uint8_t wire[kMaxPacket];
+        const std::size_t len = device_emit_telemetry(seq, wire, sizeof(wire));
+        Frame frame;
+        const auto [st, crc] = decode_region(wire, len - 1, frame);
+        (void)crc;
+        if (st == FrameStatus::Ok) {
+            dispatch_stream(kStreams, frame);
+        }
     }
 
     return 0;
