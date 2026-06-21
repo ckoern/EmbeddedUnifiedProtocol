@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Emit build/compile_commands.json so editors/IntelliSense pick up exact flags
+# and include paths (including the fetched Catch2 headers).
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # The codec itself: portable, freestanding-friendly C++17.
 add_library(eup STATIC
     src/crc16.cpp
