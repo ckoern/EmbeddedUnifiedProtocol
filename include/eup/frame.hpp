@@ -2,13 +2,13 @@
 //
 // Wire layout (one packet, max 256 bytes):
 //
-//   +--------+----------+------+--------+-------------------+-----------+
-//   | 0x00   | overhead | TYPE | LENGTH | PAYLOAD (0..250)  | CRC16 (2) |
-//   | delim  |  (COBS)  |      |        |                   |  LE       |
-//   +--------+----------+------+--------+-------------------+-----------+
-//            \__________________ COBS-encoded region ___________________/
+//   +----------+------+--------+-------------------+-----------+--------+
+//   | overhead | TYPE | LENGTH | PAYLOAD (0..250)  | CRC16 (2) | 0x00   |
+//   |  (COBS)  |      |        |                   |  LE       | delim  |
+//   +----------+------+--------+-------------------+-----------+--------+
+//   \__________________ COBS-encoded region ___________________/
 //
-//   - The leading 0x00 is the frame delimiter (the only 0x00 on the wire).
+//   - The trailing 0x00 is the frame delimiter (the only 0x00 on the wire).
 //   - The COBS region encodes the raw block [TYPE | LENGTH | PAYLOAD | CRC16].
 //   - CRC-16/CCITT-FALSE is computed over TYPE + LENGTH + PAYLOAD only and is
 //     transmitted little-endian (low byte first) inside the COBS region.
@@ -43,6 +43,7 @@ enum class MessageType : std::uint8_t {
     Command = 0x01,  // host -> device, optional parameters in PAYLOAD
     Reply   = 0x02,  // device -> host, status code (+ optional results)
     Data    = 0x03,  // device -> host, unsolicited data packet
+    Status  = 0x04,  // device -> host, unsolicited status packet
 };
 
 // A decoded frame. PAYLOAD is copied into a fixed buffer so the caller owns the

@@ -28,14 +28,14 @@ EncodeResult encode_frame(MessageType type,
 
     const std::size_t rawLen = crcCovered + kCrcSize;
 
-    // Leading delimiter, then the COBS-encoded region.
-    if (outCap < 1) {
+    // COBS-encoded region first, trailing delimiter last.
+    // Reserve one byte at the end for the delimiter.
+    if (outCap < 2) {
         return {FrameStatus::BufferTooSmall, 0};
     }
-    out[0] = kDelimiter;
 
     const auto [encStatus, encLen] =
-        cobs_encode(raw, rawLen, out + 1, outCap - 1);
+        cobs_encode(raw, rawLen, out, outCap - 1);
     if (encStatus == CobsStatus::OutputTooSmall) {
         return {FrameStatus::BufferTooSmall, 0};
     }
@@ -43,6 +43,7 @@ EncodeResult encode_frame(MessageType type,
         return {FrameStatus::CobsError, 0};
     }
 
+    out[encLen] = kDelimiter;
     return {FrameStatus::Ok, encLen + 1};
 }
 

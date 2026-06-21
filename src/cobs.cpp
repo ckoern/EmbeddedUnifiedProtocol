@@ -21,13 +21,15 @@ CobsResult cobs_encode(const std::uint8_t* src, std::size_t srcLen,
             if (write >= dstCap) {
                 return {CobsStatus::OutputTooSmall, 0};
             }
-            codeIdx = write++;
+            codeIdx = write;
+            ++write;
             code = 1;
         } else {
             if (write >= dstCap) {
                 return {CobsStatus::OutputTooSmall, 0};
             }
-            dst[write++] = src[read];
+            dst[write] = src[read];
+            ++write;
             ++code;
             if (code == 0xFF) {
                 // Maximal block reached; emit it.
@@ -40,7 +42,8 @@ CobsResult cobs_encode(const std::uint8_t* src, std::size_t srcLen,
                 if (write >= dstCap) {
                     return {CobsStatus::OutputTooSmall, 0};
                 }
-                codeIdx = write++;
+                codeIdx = write;
+                ++write;
                 code = 1;
             }
         }
@@ -57,7 +60,8 @@ CobsResult cobs_decode(const std::uint8_t* src, std::size_t srcLen,
     std::size_t write = 0;
 
     while (read < srcLen) {
-        const std::uint8_t code = src[read++];
+        const std::uint8_t code = src[read];
+        ++read;
         if (code == 0) {
             // A delimiter must never appear inside a COBS block.
             return {CobsStatus::MalformedInput, 0};
@@ -70,7 +74,9 @@ CobsResult cobs_decode(const std::uint8_t* src, std::size_t srcLen,
             if (write >= dstCap) {
                 return {CobsStatus::OutputTooSmall, 0};
             }
-            dst[write++] = src[read++];
+            dst[write] = src[read];
+            ++write;
+            ++read;
         }
 
         // A code < 0xFF that is not the last block represents a trailing 0x00.
@@ -78,7 +84,8 @@ CobsResult cobs_decode(const std::uint8_t* src, std::size_t srcLen,
             if (write >= dstCap) {
                 return {CobsStatus::OutputTooSmall, 0};
             }
-            dst[write++] = 0;
+            dst[write] = 0;
+            ++write;
         }
     }
 

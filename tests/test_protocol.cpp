@@ -101,18 +101,18 @@ void frame_roundtrip(MessageType type, const std::vector<std::uint8_t>& payload)
         static_cast<std::uint8_t>(payload.size()), wire, sizeof(wire));
     CHECK(encStatus == FrameStatus::Ok);
     CHECK(encLen <= kMaxPacket);
-    CHECK(wire[0] == kDelimiter);
+    CHECK(wire[encLen - 1] == kDelimiter);
 
-    // Only the leading byte may be a delimiter.
+    // Only the trailing byte may be a delimiter.
     bool innerZero = false;
-    for (std::size_t i = 1; i < encLen; ++i) {
+    for (std::size_t i = 0; i < encLen - 1; ++i) {
         if (wire[i] == 0) innerZero = true;
     }
     CHECK(!innerZero);
 
-    // Decode the region directly (skip the leading delimiter).
+    // Decode the region directly (strip the trailing delimiter).
     Frame f;
-    const auto [decStatus, decCrc] = decode_region(wire + 1, encLen - 1, f);
+    const auto [decStatus, decCrc] = decode_region(wire, encLen - 1, f);
     (void)decCrc;
     CHECK(decStatus == FrameStatus::Ok);
     CHECK(f.type == type);
@@ -187,7 +187,6 @@ void test_frame_reader_interleaved() {
     stream.insert(stream.end(), a, a + lenA);
     stream.insert(stream.end(), b, b + lenB);
     stream.insert(stream.end(), c, c + lenC);
-    stream.push_back(0x00);  // close the last frame (no following packet to do it)
 
     FrameReader reader;
     std::vector<MessageType> got;
@@ -218,15 +217,14 @@ void test_frame_reader_resyncs_after_garbage() {
     for (std::uint8_t junk : {0x10, 0x20, 0x30}) {
         reader.push(junk);
     }
-    // The leading delimiter of the real packet closes the garbage region as an
-    // Error, then the frame decodes cleanly.
-    // Build stream: real packet + one closing 0x00 to flush the last frame.
-    std::vector<std::uint8_t> stream(pkt, pkt + encLen);
-    stream.push_back(0x00);
+    // A bare 0x00 flushes the garbage region; the reader returns Error and resets.
+    CHECK(reader.push(0x00) == FrameReader::Event::Error);
 
+    // The real packet ends with its own trailing 0x00, so pushing it in full
+    // decodes the frame cleanly.
     bool sawFrame = false;
-    for (std::uint8_t byte : stream) {
-        if (reader.push(byte) == FrameReader::Event::FrameReady) {
+    for (std::size_t i = 0; i < encLen; ++i) {
+        if (reader.push(pkt[i]) == FrameReader::Event::FrameReady) {
             sawFrame = true;
             CHECK(reader.frame().type == MessageType::Reply);
             CHECK(reader.frame().length == 1);
