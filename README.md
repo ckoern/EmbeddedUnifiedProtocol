@@ -89,7 +89,8 @@ for (std::uint8_t b : received_bytes) {
 ```
 include/eup/   crc16.hpp  cobs.hpp  frame.hpp   (public headers)
 src/           crc16.cpp  cobs.cpp  frame.cpp
-tests/         test_protocol.cpp                 (host tests, no framework)
+tests/         test_protocol.cpp  test_command.cpp  test_host.cpp  (Catch2)
+examples/      device + host example sharing one command contract
 CMakeLists.txt
 ```
 
@@ -101,5 +102,10 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+The tests use [Catch2 v3](https://github.com/catchorg/Catch2), pulled
+automatically at configure time via CMake `FetchContent` (or reused if already
+installed) — nothing to install by hand. Each `TEST_CASE` is registered as its
+own `ctest` test.
+
 The library sources (`src/*.cpp` + `include/`) compile directly into firmware
-with any C++17 toolchain — no CMake or host dependencies required.
+with any C++17 toolchain — no CMake, Catch2, or host dependencies required.

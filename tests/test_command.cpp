@@ -1,6 +1,7 @@
-// Host-side tests for the EUP command layer: Codec<T> (de)serialization plus
-// end-to-end command dispatch (opcode lookup, argument decode, result encode)
-// including a full round trip through the framing layer.
+// Host-side tests for the EUP command layer (Catch2): Codec<T> (de)serialization
+// plus end-to-end command dispatch, including a full round trip through framing.
+
+#include <catch2/catch_test_macros.hpp>
 
 #include "eup/codec.hpp"
 #include "eup/command.hpp"
@@ -9,27 +10,13 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdio>
 #include <tuple>
-
-namespace {
-
-int g_pass = 0;
-int g_fail = 0;
-
-#define CHECK(cond)                                                       \
-    do {                                                                  \
-        if (cond) {                                                       \
-            ++g_pass;                                                     \
-        } else {                                                          \
-            ++g_fail;                                                     \
-            std::printf("FAIL: %s  (%s:%d)\n", #cond, __FILE__, __LINE__); \
-        }                                                                 \
-    } while (0)
 
 using namespace eup;
 
-// ---- Codec round trips ---------------------------------------------------
+namespace {
+
+// ---- helpers -------------------------------------------------------------
 
 template <class T>
 void codec_roundtrip(T value) {
@@ -47,108 +34,7 @@ void codec_roundtrip(T value) {
 
 enum class Color : std::uint16_t { Red = 1, Green = 2, Blue = 0xBEEF };
 
-void test_codec_scalars() {
-    codec_roundtrip<std::uint8_t>(0xAB);
-    codec_roundtrip<std::uint16_t>(0x1234);
-    codec_roundtrip<std::uint32_t>(0xDEADBEEF);
-    codec_roundtrip<std::uint64_t>(0x0123456789ABCDEFull);
-    codec_roundtrip<std::int8_t>(-7);
-    codec_roundtrip<std::int16_t>(-1000);
-    codec_roundtrip<std::int32_t>(-123456);
-    codec_roundtrip<bool>(true);
-    codec_roundtrip<bool>(false);
-    codec_roundtrip<float>(3.14159f);
-    codec_roundtrip<double>(2.718281828459045);
-    codec_roundtrip<Color>(Color::Blue);
-}
-
-void test_codec_little_endian() {
-    std::uint8_t buf[4] = {};
-    std::size_t n = 0;
-    CHECK(Codec<std::uint32_t>::encode(0x11223344u, buf, sizeof(buf), n));
-    CHECK(buf[0] == 0x44 && buf[1] == 0x33 && buf[2] == 0x22 && buf[3] == 0x11);
-}
-
-// ---- Span codec ----------------------------------------------------------
-
-void test_span_array_roundtrip() {
-    InlineArray<std::uint16_t, 8> a;
-    a.push_back(0x1111);
-    a.push_back(0x2222);
-    a.push_back(0x3333);
-
-    std::uint8_t buf[32] = {};
-    std::size_t n = 0;
-    CHECK(Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
-    CHECK(n == 1 + 3 * 2);  // count byte + three uint16
-    CHECK(buf[0] == 3);
-
-    decltype(a) out;
-    std::size_t consumed = 0;
-    CHECK(Codec<decltype(a)>::decode(buf, n, out, consumed));
-    CHECK(consumed == n);
-    CHECK(out == a);
-}
-
-void test_span_string_roundtrip() {
-    InlineString<16> s = make_string<16>("hello");
-    CHECK(s.size() == 5);
-
-    std::uint8_t buf[32] = {};
-    std::size_t n = 0;
-    CHECK(Codec<InlineString<16>>::encode(s, buf, sizeof(buf), n));
-    CHECK(n == 1 + 5);
-    CHECK(buf[0] == 5);
-    CHECK(buf[1] == 'h' && buf[5] == 'o');
-
-    InlineString<16> out;
-    std::size_t consumed = 0;
-    CHECK(Codec<InlineString<16>>::decode(buf, n, out, consumed));
-    CHECK(out == s);
-}
-
-void test_span_empty() {
-    InlineArray<std::uint8_t, 8> a;  // empty
-    std::uint8_t buf[8] = {};
-    std::size_t n = 0;
-    CHECK(Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
-    CHECK(n == 1);
-    CHECK(buf[0] == 0);
-}
-
-void test_span_count_exceeds_capacity() {
-    // A buffer claiming count=5 decoded into a capacity-3 span must be rejected.
-    const std::uint8_t buf[] = {0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    InlineArray<std::uint16_t, 3> out;
-    std::size_t consumed = 0;
-    CHECK(!Codec<decltype(out)>::decode(buf, sizeof(buf), out, consumed));
-}
-
-void test_span_short_input() {
-    // Claims three uint16 but only one byte of element data follows.
-    const std::uint8_t buf[] = {0x03, 0x00};
-    InlineArray<std::uint16_t, 8> out;
-    std::size_t consumed = 0;
-    CHECK(!Codec<decltype(out)>::decode(buf, sizeof(buf), out, consumed));
-}
-
-void test_span_encode_output_too_small() {
-    InlineArray<std::uint16_t, 8> a;
-    a.push_back(0xAAAA);
-    a.push_back(0xBBBB);
-    std::uint8_t buf[3] = {};  // needs 1 + 4
-    std::size_t n = 0;
-    CHECK(!Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
-}
-
-void test_codec_short_input_fails() {
-    const std::uint8_t buf[1] = {0x42};
-    std::uint16_t out = 0;
-    std::size_t consumed = 0;
-    CHECK(!Codec<std::uint16_t>::decode(buf, sizeof(buf), out, consumed));
-}
-
-// ---- Command handlers ----------------------------------------------------
+// ---- command handlers ----------------------------------------------------
 
 bool g_led = false;
 
@@ -202,9 +88,113 @@ Frame make_command(std::uint8_t opcode, const std::uint8_t* args,
     return f;
 }
 
+}  // namespace
+
+// ---- Codec round trips ---------------------------------------------------
+
+TEST_CASE("codec: scalar round trips", "[codec]") {
+    codec_roundtrip<std::uint8_t>(0xAB);
+    codec_roundtrip<std::uint16_t>(0x1234);
+    codec_roundtrip<std::uint32_t>(0xDEADBEEF);
+    codec_roundtrip<std::uint64_t>(0x0123456789ABCDEFull);
+    codec_roundtrip<std::int8_t>(-7);
+    codec_roundtrip<std::int16_t>(-1000);
+    codec_roundtrip<std::int32_t>(-123456);
+    codec_roundtrip<bool>(true);
+    codec_roundtrip<bool>(false);
+    codec_roundtrip<float>(3.14159f);
+    codec_roundtrip<double>(2.718281828459045);
+    codec_roundtrip<Color>(Color::Blue);
+}
+
+TEST_CASE("codec: little-endian byte order", "[codec]") {
+    std::uint8_t buf[4] = {};
+    std::size_t n = 0;
+    CHECK(Codec<std::uint32_t>::encode(0x11223344u, buf, sizeof(buf), n));
+    CHECK((buf[0] == 0x44 && buf[1] == 0x33 && buf[2] == 0x22 && buf[3] == 0x11));
+}
+
+TEST_CASE("codec: short input fails", "[codec]") {
+    const std::uint8_t buf[1] = {0x42};
+    std::uint16_t out = 0;
+    std::size_t consumed = 0;
+    CHECK(!Codec<std::uint16_t>::decode(buf, sizeof(buf), out, consumed));
+}
+
+// ---- Span codec ----------------------------------------------------------
+
+TEST_CASE("span: array round trip", "[codec][span]") {
+    InlineArray<std::uint16_t, 8> a;
+    a.push_back(0x1111);
+    a.push_back(0x2222);
+    a.push_back(0x3333);
+
+    std::uint8_t buf[32] = {};
+    std::size_t n = 0;
+    CHECK(Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
+    CHECK(n == 1 + 3 * 2);  // count byte + three uint16
+    CHECK(buf[0] == 3);
+
+    decltype(a) out;
+    std::size_t consumed = 0;
+    CHECK(Codec<decltype(a)>::decode(buf, n, out, consumed));
+    CHECK(consumed == n);
+    CHECK(out == a);
+}
+
+TEST_CASE("span: string round trip", "[codec][span]") {
+    InlineString<16> s = make_string<16>("hello");
+    CHECK(s.size() == 5);
+
+    std::uint8_t buf[32] = {};
+    std::size_t n = 0;
+    CHECK(Codec<InlineString<16>>::encode(s, buf, sizeof(buf), n));
+    CHECK(n == 1 + 5);
+    CHECK(buf[0] == 5);
+    CHECK((buf[1] == 'h' && buf[5] == 'o'));
+
+    InlineString<16> out;
+    std::size_t consumed = 0;
+    CHECK(Codec<InlineString<16>>::decode(buf, n, out, consumed));
+    CHECK(out == s);
+}
+
+TEST_CASE("span: empty", "[codec][span]") {
+    InlineArray<std::uint8_t, 8> a;  // empty
+    std::uint8_t buf[8] = {};
+    std::size_t n = 0;
+    CHECK(Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
+    CHECK(n == 1);
+    CHECK(buf[0] == 0);
+}
+
+TEST_CASE("span: count exceeding capacity is rejected", "[codec][span]") {
+    const std::uint8_t buf[] = {0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    InlineArray<std::uint16_t, 3> out;
+    std::size_t consumed = 0;
+    CHECK(!Codec<decltype(out)>::decode(buf, sizeof(buf), out, consumed));
+}
+
+TEST_CASE("span: short input is rejected", "[codec][span]") {
+    // Claims three uint16 but only one byte of element data follows.
+    const std::uint8_t buf[] = {0x03, 0x00};
+    InlineArray<std::uint16_t, 8> out;
+    std::size_t consumed = 0;
+    CHECK(!Codec<decltype(out)>::decode(buf, sizeof(buf), out, consumed));
+}
+
+TEST_CASE("span: encode output too small is rejected", "[codec][span]") {
+    InlineArray<std::uint16_t, 8> a;
+    a.push_back(0xAAAA);
+    a.push_back(0xBBBB);
+    std::uint8_t buf[3] = {};  // needs 1 + 4
+    std::size_t n = 0;
+    CHECK(!Codec<decltype(a)>::encode(a, buf, sizeof(buf), n));
+}
+
 // ---- Dispatch ------------------------------------------------------------
 
-void test_dispatch_args_and_result() {
+TEST_CASE("dispatch: arguments and result", "[command]") {
     const std::uint8_t args[] = {20, 22};
     const Frame cmd = make_command(kOpAdd, args, 2);
 
@@ -220,7 +210,7 @@ void test_dispatch_args_and_result() {
     CHECK(sum == 42);
 }
 
-void test_dispatch_status_only_runs_handler() {
+TEST_CASE("dispatch: status-only handler runs", "[command]") {
     const std::uint8_t args[] = {1};  // on = true
     const Frame cmd = make_command(kOpSetLed, args, 1);
 
@@ -233,7 +223,7 @@ void test_dispatch_status_only_runs_handler() {
     CHECK(g_led == true);
 }
 
-void test_dispatch_no_args() {
+TEST_CASE("dispatch: no-argument command", "[command]") {
     const Frame cmd = make_command(kOpPing, nullptr, 0);
 
     std::uint8_t reply[kMaxPayload] = {};
@@ -244,7 +234,7 @@ void test_dispatch_no_args() {
     CHECK(reply[1] == 0x7E);
 }
 
-void test_dispatch_unknown_opcode() {
+TEST_CASE("dispatch: unknown opcode", "[command]") {
     const Frame cmd = make_command(0xFE, nullptr, 0);
 
     std::uint8_t reply[kMaxPayload] = {};
@@ -254,7 +244,7 @@ void test_dispatch_unknown_opcode() {
     CHECK(replyLen == 1);
 }
 
-void test_dispatch_bad_arguments() {
+TEST_CASE("dispatch: too few argument bytes", "[command]") {
     const std::uint8_t args[] = {20};  // add expects two bytes, not one
     const Frame cmd = make_command(kOpAdd, args, 1);
 
@@ -265,7 +255,7 @@ void test_dispatch_bad_arguments() {
     CHECK(replyLen == 1);
 }
 
-void test_dispatch_trailing_bytes_rejected() {
+TEST_CASE("dispatch: trailing argument bytes are rejected", "[command]") {
     const std::uint8_t args[] = {20, 22, 99};  // one byte too many for add
     const Frame cmd = make_command(kOpAdd, args, 3);
 
@@ -275,7 +265,7 @@ void test_dispatch_trailing_bytes_rejected() {
     CHECK(reply[0] == static_cast<std::uint8_t>(StatusCode::BadArguments));
 }
 
-void test_dispatch_span_echo() {
+TEST_CASE("dispatch: span echo", "[command][span]") {
     // payload after opcode: [count=3 | 0xAA 0xBB 0xCC]
     const std::uint8_t args[] = {0x03, 0xAA, 0xBB, 0xCC};
     const Frame cmd = make_command(kOpEcho, args, 4);
@@ -286,12 +276,12 @@ void test_dispatch_span_echo() {
     CHECK(reply[0] == static_cast<std::uint8_t>(StatusCode::Ok));
     CHECK(replyLen == 1 + 1 + 3);  // status + count + 3 bytes
     CHECK(reply[1] == 3);
-    CHECK(reply[2] == 0xAA && reply[3] == 0xBB && reply[4] == 0xCC);
+    CHECK((reply[2] == 0xAA && reply[3] == 0xBB && reply[4] == 0xCC));
 }
 
 // ---- Full round trip through the framing layer ---------------------------
 
-void test_command_full_wire_roundtrip() {
+TEST_CASE("command: full wire round trip", "[command][frame]") {
     // Host encodes a Command frame carrying opcode kOpStats (no args).
     std::uint8_t cmdPayload[1] = {kOpStats};
     std::uint8_t cmdWire[kMaxPacket];
@@ -335,29 +325,4 @@ void test_command_full_wire_roundtrip() {
     CHECK(off == rep.length);  // results consumed exactly
     CHECK(a == -42);
     CHECK(b == 1.5f);
-}
-
-}  // namespace
-
-int main() {
-    test_codec_scalars();
-    test_codec_little_endian();
-    test_codec_short_input_fails();
-    test_span_array_roundtrip();
-    test_span_string_roundtrip();
-    test_span_empty();
-    test_span_count_exceeds_capacity();
-    test_span_short_input();
-    test_span_encode_output_too_small();
-    test_dispatch_args_and_result();
-    test_dispatch_status_only_runs_handler();
-    test_dispatch_no_args();
-    test_dispatch_unknown_opcode();
-    test_dispatch_bad_arguments();
-    test_dispatch_trailing_bytes_rejected();
-    test_dispatch_span_echo();
-    test_command_full_wire_roundtrip();
-
-    std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
-    return g_fail == 0 ? 0 : 1;
 }

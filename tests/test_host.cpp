@@ -1,7 +1,9 @@
-// Host-side stub tests. A LoopbackTransport runs the device dispatch in-process,
-// so each test exercises the full symmetric path:
+// Host-side stub tests (Catch2). A LoopbackTransport runs the device dispatch
+// in-process, so each test exercises the full symmetric path:
 //   call<Def>() -> encode Command -> [transport] -> decode + dispatch ->
 //   encode Reply -> [transport] -> decode -> typed std::tuple<StatusCode, Rets...>
+
+#include <catch2/catch_test_macros.hpp>
 
 #include "eup/command.hpp"
 #include "eup/frame.hpp"
@@ -10,25 +12,12 @@
 
 #include <array>
 #include <cstdint>
-#include <cstdio>
 #include <tuple>
-
-namespace {
-
-int g_pass = 0;
-int g_fail = 0;
-
-#define CHECK(cond)                                                       \
-    do {                                                                  \
-        if (cond) {                                                       \
-            ++g_pass;                                                     \
-        } else {                                                          \
-            ++g_fail;                                                     \
-            std::printf("FAIL: %s  (%s:%d)\n", #cond, __FILE__, __LINE__); \
-        }                                                                 \
-    } while (0)
+#include <type_traits>
 
 using namespace eup;
+
+namespace {
 
 // ---- Handlers and single-source command definitions ----------------------
 
@@ -68,8 +57,8 @@ constexpr std::array<CommandEntry, 4> kTable{{
 
 // ---- Transports ----------------------------------------------------------
 
-// Runs the device dispatch in-process: send() decodes + dispatches the command
-// and stashes a Reply frame; recv() hands it back.
+// Runs the device dispatch in-process: send_command() decodes + dispatches the
+// command and stashes a Reply frame; await_reply() hands it back.
 template <std::size_t N>
 struct LoopbackTransport {
     const std::array<CommandEntry, N>& table;
@@ -118,16 +107,18 @@ struct DeadTransport {
     bool await_reply(Frame&) noexcept { return false; }
 };
 
+}  // namespace
+
 // ---- Tests ---------------------------------------------------------------
 
-void test_call_args_and_result() {
+TEST_CASE("call: arguments and result", "[host]") {
     auto tx = make_loopback(kTable);
     auto [status, sum] = call<AddCmd>(tx, std::uint8_t{20}, std::uint8_t{22});
     CHECK(status == StatusCode::Ok);
     CHECK(sum == 42);
 }
 
-void test_call_status_only_runs_handler() {
+TEST_CASE("call: status-only handler runs", "[host]") {
     auto tx = make_loopback(kTable);
     g_led = false;
     auto [status] = call<SetLedCmd>(tx, true);
@@ -135,7 +126,7 @@ void test_call_status_only_runs_handler() {
     CHECK(g_led == true);
 }
 
-void test_call_multi_return_no_args() {
+TEST_CASE("call: multi-return, no arguments", "[host]") {
     auto tx = make_loopback(kTable);
     auto [status, a, b] = call<StatsCmd>(tx);
     CHECK(status == StatusCode::Ok);
@@ -143,17 +134,16 @@ void test_call_multi_return_no_args() {
     CHECK(b == 1.5f);
 }
 
-void test_call_return_type_mirrors_handler() {
-    // The host result type is exactly the device handler's return type.
+TEST_CASE("call: return type mirrors the handler", "[host]") {
     static_assert(
         std::is_same_v<decltype(call<AddCmd>(std::declval<LoopbackTransport<3>&>(),
                                              std::uint8_t{}, std::uint8_t{})),
                        decltype(add(0, 0))>,
         "host call must return the handler's tuple type");
-    CHECK(true);
+    SUCCEED("compile-time check");
 }
 
-void test_call_unknown_opcode() {
+TEST_CASE("call: unknown opcode", "[host]") {
     auto tx = make_loopback(kTable);
     // Host sends opcode 0x7F, which the device table does not contain.
     auto [status, a, b] = call<UnregisteredCmd>(tx);
@@ -162,14 +152,14 @@ void test_call_unknown_opcode() {
     (void)b;
 }
 
-void test_call_transport_error() {
+TEST_CASE("call: transport error", "[host]") {
     DeadTransport tx;
     auto [status, sum] = call<AddCmd>(tx, std::uint8_t{1}, std::uint8_t{2});
     CHECK(status == StatusCode::TransportError);
     (void)sum;
 }
 
-void test_call_span_roundtrip() {
+TEST_CASE("call: span round trip", "[host][span]") {
     auto tx = make_loopback(kTable);
     InlineArray<std::uint16_t, 4> in;
     in.push_back(0x0101);
@@ -178,19 +168,4 @@ void test_call_span_roundtrip() {
     auto [status, out] = call<EchoWordsCmd>(tx, in);
     CHECK(status == StatusCode::Ok);
     CHECK(out == in);
-}
-
-}  // namespace
-
-int main() {
-    test_call_args_and_result();
-    test_call_status_only_runs_handler();
-    test_call_multi_return_no_args();
-    test_call_return_type_mirrors_handler();
-    test_call_unknown_opcode();
-    test_call_transport_error();
-    test_call_span_roundtrip();
-
-    std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
-    return g_fail == 0 ? 0 : 1;
 }
