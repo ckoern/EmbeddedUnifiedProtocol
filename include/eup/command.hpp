@@ -104,6 +104,18 @@ DispatchResult dispatch_thunk(const std::uint8_t* args, std::size_t argLen,
     return {status, written};
 }
 
+// Binds an opcode to a handler in one place, so the device registration and the
+// host stub (host.hpp) reference the same definition and can never drift:
+//
+//   using AddCmd = CommandDef<0x01, &add>;
+//   command<AddCmd>()        // device: table entry
+//   call<AddCmd>(tx, 20, 22) // host:   typed call
+template <std::uint8_t Op, auto Fn>
+struct CommandDef {
+    static constexpr std::uint8_t opcode = Op;
+    static constexpr auto         fn     = Fn;
+};
+
 // One row of the command table: an opcode and its thunk.
 struct CommandEntry {
     std::uint8_t opcode   = 0;
@@ -121,6 +133,12 @@ constexpr CommandEntry command() noexcept {
     static_assert(TupleMaxSize<typename Traits::RetsTuple>::value <= kMaxPayload - 1,
                   "command results exceed the maximum payload");
     return CommandEntry{Op, &dispatch_thunk<Fn>};
+}
+
+// Build a table entry from a CommandDef (single source of truth for the opcode).
+template <class Def>
+constexpr CommandEntry command() noexcept {
+    return command<Def::opcode, Def::fn>();
 }
 
 // Dispatch a decoded Command frame against a table. Writes the Reply payload

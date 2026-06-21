@@ -21,6 +21,7 @@ enum class StatusCode : std::uint8_t {
     BadArguments   = 0x02,  // argument bytes failed to decode / wrong length
     ReplyTooLarge  = 0x03,  // serialized results do not fit in the payload
     Busy           = 0x04,  // handler could not run right now
+    TransportError = 0x05,  // host-side: send/recv/link failure (no device status)
 
     // Applications define their own codes at or above this value.
     kAppBase = 0x20,

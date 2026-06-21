@@ -31,3 +31,7 @@ add_test(NAME eup_tests COMMAND eup_tests)
 add_executable(eup_command_tests tests/test_command.cpp)
 target_link_libraries(eup_command_tests PRIVATE eup)
 add_test(NAME eup_command_tests COMMAND eup_command_tests)
+
+add_executable(eup_host_tests tests/test_host.cpp)
+target_link_libraries(eup_host_tests PRIVATE eup)
+add_test(NAME eup_host_tests COMMAND eup_host_tests)
