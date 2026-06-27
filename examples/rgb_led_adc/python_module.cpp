@@ -6,7 +6,7 @@
 #include "eup_pybind.hpp"  // generic binding core
 #include "commands.hpp"    // this application's contracts
 
-PYBIND11_MODULE(eup, m) {
+PYBIND11_MODULE(example_protocol, m) {
     m.doc() = "EUP host bindings for the rgb_led_adc example";
 
     auto dev = eup::pybind::register_core(m);

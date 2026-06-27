@@ -17,34 +17,20 @@ else()
         -Wall -Wextra -Wpedantic -fno-exceptions -fno-rtti)
 endif()
 
-# --- Optional Python bindings (pybind11), fetched automatically. Disabled with
-#     -DEUP_BUILD_PYTHON=OFF, and skipped if no Python development headers exist.
-option(EUP_BUILD_PYTHON "Build the pybind11 Python bindings" ON)
-if(EUP_BUILD_PYTHON)
-    find_package(Python COMPONENTS Interpreter Development QUIET)
-    if(Python_FOUND)
-        include(FetchContent)
-        FetchContent_Declare(
-            pybind11
-            GIT_REPOSITORY https://github.com/pybind/pybind11.git
-            GIT_TAG        v2.13.6
-        )
-        FetchContent_MakeAvailable(pybind11)
+# --- Python bindings for this example's contracts. Reuses the shared pybind11
+#     setup from the top-level CMakeLists (EUP_PYTHON_ENABLED, Python_EXECUTABLE).
+if(EUP_PYTHON_ENABLED)
+    # python_module.cpp registers this example's contracts; the generic binding
+    # core lives in <repo>/bindings/eup_pybind.hpp.
+    pybind11_add_module(example_protocol_py python_module.cpp)
+    set_target_properties(example_protocol_py PROPERTIES OUTPUT_NAME example_protocol)
+    target_link_libraries(example_protocol_py PRIVATE eup)
+    target_include_directories(example_protocol_py PRIVATE
+        ${CMAKE_SOURCE_DIR}/bindings        # eup_pybind.hpp (core)
+        ${CMAKE_CURRENT_SOURCE_DIR})        # commands.hpp (app)
 
-        # python_module.cpp registers this example's contracts; the generic
-        # binding core lives in <repo>/bindings/eup_pybind.hpp.
-        pybind11_add_module(eup_py python_module.cpp)
-        set_target_properties(eup_py PROPERTIES OUTPUT_NAME eup)  # import eup
-        target_link_libraries(eup_py PRIVATE eup)
-        target_include_directories(eup_py PRIVATE
-            ${CMAKE_SOURCE_DIR}/bindings        # eup_pybind.hpp (core)
-            ${CMAKE_CURRENT_SOURCE_DIR})        # commands.hpp (app)
-
-        add_test(NAME eup_python_tests
-                 COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python.py)
-        set_tests_properties(eup_python_tests PROPERTIES
-            ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:eup_py>")
-    else()
-        message(STATUS "Python development headers not found; skipping eup_py")
-    endif()
+    add_test(NAME example_protocol_python_tests
+             COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_python.py)
+    set_tests_properties(example_protocol_python_tests PROPERTIES
+        ENVIRONMENT "PYTHONPATH=$<TARGET_FILE_DIR:example_protocol_py>")
 endif()
