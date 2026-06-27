@@ -61,17 +61,6 @@ add_executable(eup_stream_tests tests/test_stream.cpp)
 target_link_libraries(eup_stream_tests PRIVATE eup Catch2::Catch2WithMain)
 catch_discover_tests(eup_stream_tests)
 
-# Example: device firmware + host driver sharing one command contract.
-add_executable(eup_example
-    examples/rgb_led_adc/device.cpp
-    examples/rgb_led_adc/main.cpp
-)
-target_link_libraries(eup_example PRIVATE eup)
-target_include_directories(eup_example PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples/rgb_led_adc)
-if(MSVC)
-    target_compile_options(eup_example PRIVATE /W4 /GR-)
-else()
-    target_compile_options(eup_example PRIVATE
-        -Wall -Wextra -Wpedantic -fno-exceptions -fno-rtti)
-endif()
+# Examples (device + host demo, and the Python bindings) build themselves; each
+# is self-contained and uses the `eup` target defined above.
+add_subdirectory(examples/rgb_led_adc)

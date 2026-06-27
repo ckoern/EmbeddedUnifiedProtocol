@@ -250,20 +250,6 @@ constexpr bool operator==(const InlineArray<T, N>& a,
     return true;
 }
 
-// A short byte string. Length-prefixed on the wire, NOT NUL-terminated, so it
-// may carry any bytes. Build one from a C string with make_string<N>.
-template <std::size_t N>
-using InlineString = InlineArray<std::uint8_t, N>;
-
-template <std::size_t N>
-InlineString<N> make_string(const char* s) noexcept {
-    InlineString<N> out;
-    for (std::size_t i = 0; s != nullptr && s[i] != '\0' && i < N; ++i) {
-        out.push_back(static_cast<std::uint8_t>(s[i]));
-    }
-    return out;
-}
-
 // Codec for a span: [ COUNT (1 byte) | elem0 | elem1 | ... ]. The element type
 // must itself be fixed-size (no nested spans), enforced below.
 template <class T, std::size_t N>
@@ -315,6 +301,30 @@ struct Codec<InlineArray<T, N>, void> {
         return true;
     }
 };
+
+// A short byte string: a distinct type from InlineArray<uint8_t, N> (so callers
+// and bindings can treat "string" and "byte array" differently), but with the
+// same wire format and storage. Length-prefixed on the wire, NOT NUL-terminated,
+// so it may carry any bytes. Build one from a C string with make_string<N>.
+template <std::size_t N>
+class InlineString : public InlineArray<std::uint8_t, N> {
+public:
+    using InlineArray<std::uint8_t, N>::InlineArray;
+};
+
+// InlineString reuses the InlineArray codec (same wire format); the inherited
+// encode/decode bind the string through its InlineArray base subobject.
+template <std::size_t N>
+struct Codec<InlineString<N>, void> : Codec<InlineArray<std::uint8_t, N>, void> {};
+
+template <std::size_t N>
+InlineString<N> make_string(const char* s) noexcept {
+    InlineString<N> out;
+    for (std::size_t i = 0; s != nullptr && s[i] != '\0' && i < N; ++i) {
+        out.push_back(static_cast<std::uint8_t>(s[i]));
+    }
+    return out;
+}
 
 // --- tuple helpers ---------------------------------------------------------
 
